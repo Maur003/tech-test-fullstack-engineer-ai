@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import type { Game } from "@/lib/games/types";
+import type { Game } from "@/features/games/domain/types";
 
 type SortKey = keyof Omit<Game, "id">;
 type Props = {

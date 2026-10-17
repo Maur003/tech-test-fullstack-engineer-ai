@@ -1,3 +1,80 @@
 {
-  "extends": ["next/core-web-vitals", "next/typescript"]
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  "overrides": [
+    {
+      "files": ["src/features/**/domain/**/*.{ts,tsx}"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "react",
+                  "react-dom",
+                  "react/*",
+                  "next",
+                  "next/*",
+                  "fs",
+                  "fs/*",
+                  "node:fs",
+                  "node:fs/*",
+                  "ai",
+                  "ai/*",
+                  "@ai-sdk/*"
+                ],
+                "message": "Domain code cannot import react, next, fs, or ai."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/features/**/components/**/*.{ts,tsx}"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/server",
+                  "**/server/**",
+                  "@/features/**/server",
+                  "@/features/**/server/**"
+                ],
+                "message": "Components cannot import from a server folder."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/features/**/index.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/server",
+                  "**/server/**",
+                  "**/components",
+                  "**/components/**",
+                  "@/features/**/server",
+                  "@/features/**/server/**",
+                  "@/features/**/components",
+                  "@/features/**/components/**"
+                ],
+                "message": "Do not use a barrel that mixes components and server code."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }

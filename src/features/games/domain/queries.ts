@@ -1,72 +1,35 @@
-import { z } from "zod";
-
 import type { Game } from "./types";
 
 export const MAX_TOOL_ROWS = 20;
 
-const filterShape = {
-  genre: z.string().optional().describe("Exact genre, case-insensitive"),
-  developer: z
-    .string()
-    .optional()
-    .describe("Exact developer, case-insensitive"),
-  rating_above: z
-    .number()
-    .optional()
-    .describe("Strict greater-than filter on average_rating. Above 4 means 4."),
-  rating_at_least: z
-    .number()
-    .optional()
-    .describe("Inclusive filter on average_rating. At least 4 means 4."),
+export type CountGamesInput = {
+  genre?: string;
+  developer?: string;
+  rating_above?: number;
+  rating_at_least?: number;
 };
 
-export const searchGamesSchema = z.object({
-  ...filterShape,
-  sort_by: z
-    .enum([
-      "title",
-      "developer",
-      "genre",
-      "monthly_revenue_usd",
-      "monthly_downloads",
-      "average_rating",
-    ])
-    .optional()
-    .describe("Field to sort by. Default title."),
-  order: z.enum(["asc", "desc"]).optional().describe("Sort direction. Default asc."),
-  limit: z
-    .number()
-    .int()
-    .min(1)
-    .max(MAX_TOOL_ROWS)
-    .optional()
-    .describe("Max rows, 1-20. Default 10. Revenue ties for first are not cut."),
-});
+export type SearchGamesInput = CountGamesInput & {
+  sort_by?:
+    | "title"
+    | "developer"
+    | "genre"
+    | "monthly_revenue_usd"
+    | "monthly_downloads"
+    | "average_rating";
+  order?: "asc" | "desc";
+  limit?: number;
+};
 
-export const countGamesSchema = z.object(filterShape);
+export type CompareGamesInput = {
+  titles: string[];
+};
 
-export const compareGamesSchema = z.object({
-  titles: z
-    .array(z.string().min(1))
-    .min(2)
-    .max(4)
-    .describe("2 to 4 exact titles, case-insensitive"),
-});
-
-export const aggregateGamesSchema = z.object({
-  metric: z.enum([
-    "monthly_revenue_usd",
-    "monthly_downloads",
-    "average_rating",
-  ]),
-  op: z.enum(["sum", "avg", "min", "max"]),
-  group_by: z.enum(["genre", "developer"]).optional(),
-});
-
-export type SearchGamesInput = z.infer<typeof searchGamesSchema>;
-export type CountGamesInput = z.infer<typeof countGamesSchema>;
-export type CompareGamesInput = z.infer<typeof compareGamesSchema>;
-export type AggregateGamesInput = z.infer<typeof aggregateGamesSchema>;
+export type AggregateGamesInput = {
+  metric: "monthly_revenue_usd" | "monthly_downloads" | "average_rating";
+  op: "sum" | "avg" | "min" | "max";
+  group_by?: "genre" | "developer";
+};
 
 type Filters = {
   genre?: string;

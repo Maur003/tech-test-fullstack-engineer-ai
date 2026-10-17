@@ -2,8 +2,8 @@ import { randomUUID } from "crypto";
 import { readFile, rename, unlink, writeFile } from "fs/promises";
 import path from "path";
 
-import { DuplicateTitleError, hasDuplicateTitle } from "./titles";
-import type { Game, GameInput } from "./types";
+import { DuplicateTitleError, hasDuplicateTitle } from "@/features/games/domain/titles";
+import type { Game, GameInput } from "@/features/games/domain/types";
 
 function gamesDataPath(): string {
   const override = process.env.GAMES_DATA_FILE?.trim();

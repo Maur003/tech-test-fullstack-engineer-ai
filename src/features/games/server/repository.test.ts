@@ -3,9 +3,10 @@ import { tmpdir } from "os";
 import path from "path";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
+import { DuplicateTitleError } from "@/features/games/domain/titles";
+import type { GameInput } from "@/features/games/domain/types";
+
 import { gamesRepository } from "./repository";
-import { DuplicateTitleError } from "./titles";
-import type { GameInput } from "./types";
 
 const realFile = path.join(process.cwd(), "data", "games.json");
 const previousDataFile = process.env.GAMES_DATA_FILE;

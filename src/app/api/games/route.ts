@@ -1,7 +1,7 @@
 import { apiError, bodyTooLarge, GAMES_MAX_BODY_BYTES, unexpectedError } from "@/lib/http/api-error";
-import { gamesRepository } from "@/lib/games/repository";
-import { parseGameInput } from "@/lib/games/schema";
-import { DuplicateTitleError } from "@/lib/games/titles";
+import { parseGameInput } from "@/features/games/domain/schema";
+import { DuplicateTitleError } from "@/features/games/domain/titles";
+import { gamesRepository } from "@/features/games/server/repository";
 
 export const dynamic = "force-dynamic";
 

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import type { Game } from "@/lib/games/types";
+import type { Game } from "@/features/games/domain/types";
 
 import { ConfirmDialog } from "./ConfirmDialog";
 import { GameFormDialog } from "./GameFormDialog";

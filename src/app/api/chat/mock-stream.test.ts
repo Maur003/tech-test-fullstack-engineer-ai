@@ -5,8 +5,8 @@ import type { LanguageModelV3StreamPart } from "@ai-sdk/provider";
 import { MockLanguageModelV3, simulateReadableStream } from "ai/test";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
-import { setChatModelForTests } from "@/lib/chat/model";
-import { resetChatRateLimit } from "@/lib/chat/rate-limit";
+import { setChatModelForTests } from "@/features/chat/server/model";
+import { resetChatRateLimit } from "@/features/chat/server/rate-limit";
 
 import { POST } from "./route";
 

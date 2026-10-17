@@ -1,11 +1,11 @@
 import { convertToModelMessages, stepCountIs, streamText } from "ai";
 
-import { validateChatMessages } from "@/lib/chat/messages";
-import { resolveChatModel } from "@/lib/chat/model";
-import { clientIp, consumeChatRateLimit } from "@/lib/chat/rate-limit";
-import { SYSTEM_PROMPT } from "@/lib/chat/system-prompt";
-import { trimToRecentUserTurns } from "@/lib/chat/trim";
-import { createGameTools } from "@/lib/games/ai-tools";
+import { createGameTools } from "@/features/chat/server/game-tools";
+import { validateChatMessages } from "@/features/chat/server/messages";
+import { resolveChatModel } from "@/features/chat/server/model";
+import { clientIp, consumeChatRateLimit } from "@/features/chat/server/rate-limit";
+import { SYSTEM_PROMPT } from "@/features/chat/server/system-prompt";
+import { trimToRecentUserTurns } from "@/features/chat/server/trim";
 import { apiError, bodyTooLarge, CHAT_MAX_BODY_BYTES, unexpectedError } from "@/lib/http/api-error";
 
 export const dynamic = "force-dynamic";

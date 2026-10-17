@@ -50,6 +50,31 @@ The model can call:
 
 All math runs in code. Tool results are capped at 20 rows. The chat loop stops after 5 steps. The server keeps the last 12 messages and drops a leading non-user message so the window starts with the user.
 
+## Architecture
+
+```
+src/app                          routes and route handlers only
+src/features/games/domain        types, input schema, title rules, catalog queries
+src/features/games/server        JSON repository
+src/features/games/components    dashboard, table, dialogs
+src/features/chat/server         tool wrappers, prompt, trim, rate limit, model
+src/features/chat/components     chat panel
+src/lib                          shared helpers (HTTP errors)
+src/components                   shared chrome (site header)
+```
+
+1. `features/*/domain` imports nothing from `react`, `next`, `fs`, or `ai`.
+2. Components never import from a `server` folder.
+3. There is no barrel `index.ts` that mixes components and server code.
+
+```mermaid
+flowchart LR
+  routes["app routes"] --> features["features"]
+  features --> domain["domain"]
+```
+
+Feature folders keep each product area's domain, server code, and UI together, instead of splitting one feature across layer folders or atomic design.
+
 ## Design decisions
 
 - Persistence is `data/games.json` behind `src/lib/games/repository.ts`. Writes are queued in-process and saved by writing a temp file then renaming it.

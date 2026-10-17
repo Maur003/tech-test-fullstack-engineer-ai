@@ -1,7 +1,7 @@
 import { beforeEach, expect, it } from "vitest";
 
 import { CHAT_MAX_BODY_BYTES } from "@/lib/http/api-error";
-import { resetChatRateLimit } from "@/lib/chat/rate-limit";
+import { resetChatRateLimit } from "@/features/chat/server/rate-limit";
 
 import { POST } from "./route";
 

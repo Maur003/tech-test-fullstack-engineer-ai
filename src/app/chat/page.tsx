@@ -1,4 +1,4 @@
-import { ChatPanel } from "@/components/chat/ChatPanel";
+import { ChatPanel } from "@/features/chat/components/ChatPanel";
 
 export const dynamic = "force-dynamic";
 

@@ -1,4 +1,4 @@
-import { GamesDashboard } from "@/components/games/GamesDashboard";
+import { GamesDashboard } from "@/features/games/components/GamesDashboard";
 
 export const dynamic = "force-dynamic";
 

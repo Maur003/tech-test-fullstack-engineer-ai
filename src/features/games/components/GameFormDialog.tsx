@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 
-import type { Game, GameInput } from "@/lib/games/types";
+import type { Game, GameInput } from "@/features/games/domain/types";
 
 type Props = {
   open: boolean;

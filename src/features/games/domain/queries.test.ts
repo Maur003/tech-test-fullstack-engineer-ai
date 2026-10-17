@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Game } from "./types";
-import { aggregateGames, compareGames, countGames, searchGames } from "./tools";
+import { aggregateGames, compareGames, countGames, searchGames } from "./queries";
 
 const games: Game[] = [
   {
