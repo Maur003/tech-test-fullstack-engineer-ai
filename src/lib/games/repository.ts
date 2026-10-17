@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { readFile, rename, unlink, writeFile } from "fs/promises";
 import path from "path";
 
+import { DuplicateTitleError, hasDuplicateTitle } from "./titles";
 import type { Game, GameInput } from "./types";
 
 const dataFile = path.join(process.cwd(), "data", "games.json");
@@ -54,6 +55,9 @@ export const gamesRepository = {
   create(input: GameInput): Promise<Game> {
     return enqueue(async () => {
       const games = await readGames();
+      if (hasDuplicateTitle(games, input.title)) {
+        throw new DuplicateTitleError();
+      }
       const game: Game = { id: randomUUID(), ...input };
       games.push(game);
       await writeGames(games);
@@ -66,6 +70,9 @@ export const gamesRepository = {
       const games = await readGames();
       const index = games.findIndex((game) => game.id === id);
       if (index === -1) return null;
+      if (hasDuplicateTitle(games, input.title, id)) {
+        throw new DuplicateTitleError();
+      }
       const game: Game = { id, ...input };
       games[index] = game;
       await writeGames(games);

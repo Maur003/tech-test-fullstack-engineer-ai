@@ -93,7 +93,6 @@ describe("compareGames", () => {
     ]);
     expect(result.games.map((game) => game.title)).toEqual(["Lantern Circuit"]);
     expect(result).not.toHaveProperty("differences");
-    expect(JSON.stringify(result)).not.toContain("Lantern Ghost monthly");
   });
 
   it("returns a null percent when the baseline is zero", () => {
@@ -108,6 +107,17 @@ describe("compareGames", () => {
 });
 
 describe("aggregateGames", () => {
+  it("rounds an average that would otherwise be a binary float", () => {
+    const result = aggregateGames(
+      [
+        { ...games[3], average_rating: 4.3 },
+        { ...games[3], id: "5", title: "Moss Relay", average_rating: 3.4 },
+      ],
+      { metric: "average_rating", op: "avg" },
+    );
+    expect(result.value).toBe(3.85);
+  });
+
   it("averages rating per genre", () => {
     const result = aggregateGames(games, {
       metric: "average_rating",

@@ -1,5 +1,6 @@
 import { gamesRepository } from "@/lib/games/repository";
 import { parseGameInput } from "@/lib/games/schema";
+import { DuplicateTitleError } from "@/lib/games/titles";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,19 @@ export async function POST(request: Request) {
     );
   }
 
-  const game = await gamesRepository.create(parsed.data);
-  return Response.json(game, { status: 201 });
+  try {
+    const game = await gamesRepository.create(parsed.data);
+    return Response.json(game, { status: 201 });
+  } catch (error) {
+    if (error instanceof DuplicateTitleError) {
+      return Response.json(
+        {
+          error: "A game with this title already exists",
+          fields: { title: ["Title must be unique"] },
+        },
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
 }

@@ -199,7 +199,8 @@ function reduceMetric(values: number[], op: AggregateGamesInput["op"]): number |
   if (op === "sum") return values.reduce((sum, value) => sum + value, 0);
   if (op === "min") return Math.min(...values);
   if (op === "max") return Math.max(...values);
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
+  const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+  return Math.round(average * 100) / 100;
 }
 
 export function aggregateGames(games: Game[], input: AggregateGamesInput) {

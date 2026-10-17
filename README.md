@@ -1,5 +1,7 @@
 # Indie catalog
 
+How AI tools were used: see [AI_WORKFLOW.md](AI_WORKFLOW.md).
+
 Internal dashboard for a fictional indie-game catalog, plus a streaming chat that answers questions by calling tools. The catalog is never pasted into the model prompt.
 
 ## How to run
@@ -29,9 +31,9 @@ npm run build
 | Method | Path | Success | Errors |
 | --- | --- | --- | --- |
 | GET | `/api/games` | `200` array of games | |
-| POST | `/api/games` | `201` created game | `400` `{ error, fields }` |
+| POST | `/api/games` | `201` created game | `400` `{ error, fields }`, `409` duplicate title |
 | GET | `/api/games/:id` | `200` game | `404` |
-| PUT | `/api/games/:id` | `200` updated game | `400` field errors, `404` missing |
+| PUT | `/api/games/:id` | `200` updated game | `400` field errors, `404` missing, `409` duplicate title |
 | DELETE | `/api/games/:id` | `204` | `404` |
 | POST | `/api/chat` | UI message stream | `503` if `GEMINI_API_KEY` is missing, `400` for a bad body |
 
@@ -44,7 +46,7 @@ The model can call:
 1. `search_games` — optional `genre`, `developer`, `rating_above` (strict `>`), `rating_at_least` (`>=`), `sort_by`, `order`, `limit` (default 10, max 20). Sorting revenue descending keeps every game tied for the top revenue.
 2. `count_games` — the same filters.
 3. `compare_games` — `{ titles: string[2..4] }`. Exact title match, case-insensitive. Returns rows plus absolute and percent difference versus the first title. Missing titles return `{ notFound, suggestions }` and no invented rows. A suggestion is a catalog title that contains the typed text. Differences are rounded to 6 decimal places. Percent is `null` when the baseline is 0.
-4. `aggregate_games` — `{ metric, op: sum|avg|min|max, group_by?: genre|developer }`.
+4. `aggregate_games` — `{ metric, op: sum|avg|min|max, group_by?: genre|developer }`. `avg` is rounded to 2 decimal places in code. Sum, min, and max are not rounded.
 
 All math runs in code. Tool results are capped at 20 rows. The chat loop stops after 5 steps. The server keeps the last 12 messages and drops a leading non-user message so the window starts with the user.
 
@@ -61,3 +63,4 @@ All math runs in code. Tool results are capped at 20 rows. The chat loop stops a
 - The JSON write lock is in-process only. Two Node processes can still race.
 - The catalog has one monthly figure per game, not a month history.
 - Chat needs a Gemini key and is subject to provider quota (the UI shows the `useChat` error, including 429/quota).
+- Chat history is not persisted when navigating away.

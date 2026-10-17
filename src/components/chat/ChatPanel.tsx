@@ -2,7 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, getToolName, isToolUIPart } from "ai";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 function readableError(error: Error): string {
   const raw = error.message?.trim() || "The chat request failed.";
@@ -25,11 +25,16 @@ export function ChatPanel() {
     transport: new DefaultChatTransport({ api: "/api/chat" }),
   });
   const [input, setInput] = useState("");
+  const bottomRef = useRef<HTMLDivElement>(null);
   const busy = status === "submitted" || status === "streaming";
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: "nearest" });
+  }, [messages]);
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex min-h-80 flex-col gap-3">
+      <div role="log" aria-live="polite" className="flex min-h-80 flex-col gap-3">
         {messages.length === 0 ? (
           <p className="rounded-md border border-dashed border-stone-300 bg-white px-4 py-8 text-stone-600">
             Ask about revenue, ratings, or a comparison. The assistant looks games up with tools.
@@ -53,6 +58,18 @@ export function ChatPanel() {
                   return <p key={index}>{part.text}</p>;
                 }
                 if (!isToolUIPart(part)) return null;
+                if (part.state === "output-error") {
+                  return (
+                    <p
+                      key={part.toolCallId}
+                      className="rounded-full border border-red-300 bg-red-50 px-3 py-1 text-xs text-red-800"
+                    >
+                      Lookup failed{" "}
+                      <span className="font-semibold">{getToolName(part)}</span>{" "}
+                      {part.errorText}
+                    </p>
+                  );
+                }
                 const pending =
                   part.state === "input-streaming" || part.state === "input-available";
                 return (
@@ -72,6 +89,7 @@ export function ChatPanel() {
         {busy && messages.at(-1)?.role === "user" ? (
           <p className="text-sm text-stone-600">Looking up games...</p>
         ) : null}
+        <div ref={bottomRef} />
       </div>
 
       {error ? (
@@ -97,7 +115,6 @@ export function ChatPanel() {
           id="chat-input"
           value={input}
           onChange={(event) => setInput(event.target.value)}
-          disabled={busy}
           placeholder="Which game made the most revenue last month?"
           className="flex-1 rounded-md border border-stone-300 bg-white px-3 py-2"
         />

@@ -8,20 +8,20 @@ import { GameFormDialog } from "./GameFormDialog";
 import { GamesTable } from "./GamesTable";
 
 export function GamesDashboard() {
-  const [games, setGames] = useState<Game[]>([]);
-  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [games, setGames] = useState<Game[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Game | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setStatus("loading");
     try {
       const response = await fetch("/api/games", { cache: "no-store" });
       if (!response.ok) throw new Error("Request failed");
       setGames((await response.json()) as Game[]);
-      setStatus("ready");
+      setLoadError(null);
     } catch {
-      setStatus("error");
+      setLoadError("Could not load the catalog.");
     }
   }, []);
 
@@ -31,12 +31,17 @@ export function GamesDashboard() {
 
   async function onDelete(game: Game) {
     if (!window.confirm(`Delete ${game.title}?`)) return;
-    const response = await fetch(`/api/games/${game.id}`, { method: "DELETE" });
-    if (!response.ok && response.status !== 204) {
-      setStatus("error");
-      return;
+    try {
+      const response = await fetch(`/api/games/${game.id}`, { method: "DELETE" });
+      if (!response.ok && response.status !== 204) {
+        setActionError("Could not delete the game.");
+        return;
+      }
+      setActionError(null);
+      await load();
+    } catch {
+      setActionError("Could not reach the server. Try again.");
     }
-    await load();
   }
 
   return (
@@ -60,23 +65,31 @@ export function GamesDashboard() {
         </button>
       </div>
 
-      {status === "loading" ? (
-        <p className="rounded-md bg-white px-4 py-8 text-stone-600">Loading games...</p>
-      ) : null}
-      {status === "error" ? (
+      {loadError ? (
         <div role="alert" className="rounded-md border border-red-300 bg-red-50 px-4 py-4 text-red-800">
-          <p>Could not load the catalog.</p>
+          <p>{loadError}</p>
           <button type="button" className="mt-2 underline" onClick={() => void load()}>
             Try again
           </button>
         </div>
       ) : null}
-      {status === "ready" && games.length === 0 ? (
+      {actionError ? (
+        <div role="alert" className="flex items-start justify-between gap-3 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-red-800">
+          <p>{actionError}</p>
+          <button type="button" className="underline" onClick={() => setActionError(null)}>
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+      {games === null && !loadError ? (
+        <p className="rounded-md bg-white px-4 py-8 text-stone-600">Loading games...</p>
+      ) : null}
+      {games && games.length === 0 ? (
         <p className="rounded-md border border-dashed border-stone-300 bg-white px-4 py-8 text-center text-stone-600">
           No games yet. Add the first one.
         </p>
       ) : null}
-      {status === "ready" && games.length > 0 ? (
+      {games && games.length > 0 ? (
         <GamesTable
           games={games}
           onEdit={(game) => {
@@ -91,7 +104,11 @@ export function GamesDashboard() {
         open={dialogOpen}
         game={editing}
         onClose={() => setDialogOpen(false)}
-        onSaved={() => void load()}
+        onSaved={() => {
+          setActionError(null);
+          void load();
+        }}
+        onActionError={setActionError}
       />
     </section>
   );

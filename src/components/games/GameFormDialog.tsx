@@ -9,6 +9,7 @@ type Props = {
   game: Game | null;
   onClose: () => void;
   onSaved: () => void;
+  onActionError: (message: string) => void;
 };
 
 const empty: GameInput = {
@@ -20,7 +21,7 @@ const empty: GameInput = {
   average_rating: 0,
 };
 
-export function GameFormDialog({ open, game, onClose, onSaved }: Props) {
+export function GameFormDialog({ open, game, onClose, onSaved, onActionError }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const [fields, setFields] = useState<GameInput>(empty);
@@ -69,32 +70,39 @@ export function GameFormDialog({ open, game, onClose, onSaved }: Props) {
       average_rating: Number(fields.average_rating),
     };
 
-    const response = await fetch(game ? `/api/games/${game.id}` : "/api/games", {
-      method: game ? "PUT" : "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    try {
+      const response = await fetch(game ? `/api/games/${game.id}` : "/api/games", {
+        method: game ? "PUT" : "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    if (response.status === 400) {
-      const body = (await response.json()) as {
-        error?: string;
-        fields?: Record<string, string[]>;
-      };
-      setErrors(body.fields ?? {});
-      setFormError(body.error ?? "Could not save the game.");
+      if (response.status === 400 || response.status === 409) {
+        const body = (await response.json()) as {
+          error?: string;
+          fields?: Record<string, string[]>;
+        };
+        setErrors(body.fields ?? {});
+        setFormError(body.error ?? "Could not save the game.");
+        return;
+      }
+
+      if (!response.ok) {
+        const message = "Could not save the game.";
+        setFormError(message);
+        onActionError(message);
+        return;
+      }
+
+      onSaved();
+      onClose();
+    } catch {
+      const message = "Could not reach the server. Try again.";
+      setFormError(message);
+      onActionError(message);
+    } finally {
       setSaving(false);
-      return;
     }
-
-    if (!response.ok) {
-      setFormError("Could not save the game.");
-      setSaving(false);
-      return;
-    }
-
-    setSaving(false);
-    onSaved();
-    onClose();
   }
 
   return (
