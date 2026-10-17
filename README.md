@@ -30,7 +30,7 @@ npm run build
 
 | Method | Path | Success | Errors |
 | --- | --- | --- | --- |
-| GET | `/api/games` | `200` array of games | `500` if the catalog file is corrupt |
+| GET | `/api/games` | `200` array of games | `500` if the catalog database is corrupt |
 | POST | `/api/games` | `201` created game | `400` `{ error, fields }`, `409` duplicate title, `413` body over 10 KB, `500` unexpected |
 | GET | `/api/games/:id` | `200` game | `404`, `500` unexpected |
 | PUT | `/api/games/:id` | `200` updated game | `400` field errors, `404` missing, `409` duplicate title, `413` body over 10 KB, `500` unexpected |
@@ -55,7 +55,7 @@ All math runs in code. Tool results are capped at 20 rows. The chat loop stops a
 ```
 src/app                          routes and route handlers only
 src/features/games/domain        types, input schema, title rules, catalog queries
-src/features/games/server        JSON repository
+src/features/games/server        SQLite repository
 src/features/games/components    dashboard, table, dialogs
 src/features/chat/server         tool wrappers, prompt, trim, rate limit, model
 src/features/chat/components     chat panel
@@ -77,7 +77,7 @@ Feature folders keep each product area's domain, server code, and UI together, i
 
 ## Design decisions
 
-- Persistence is `data/games.json` behind `src/lib/games/repository.ts`. Writes are queued in-process and saved by writing a temp file then renaming it.
+- Persistence is a SQLite file, `data/games.sqlite` by default, behind `src/features/games/server/repository.ts`. The first time that file is created, rows are copied from `data/games.json`. `GAMES_DATA_FILE` points at a different database. Delete the database file to load the seed again.
 - Routes and pages that read the file or `process.env` set `dynamic = "force-dynamic"` so a POST is visible on the next GET.
 - Gemini is called with `@ai-sdk/google` `createGoogleGenerativeAI({ apiKey: process.env.GEMINI_API_KEY })` because the provider’s default env var is `GOOGLE_GENERATIVE_AI_API_KEY`. Default model is `gemini-2.5-flash`.
 - AI SDK 6 APIs from the installed docs: `streamText`, `tool({ inputSchema })`, `stopWhen: stepCountIs(5)`, `convertToModelMessages`, `result.toUIMessageStreamResponse()`, and `useChat` with `DefaultChatTransport`.
@@ -86,18 +86,18 @@ Feature folders keep each product area's domain, server code, and UI together, i
 
 - Every route uses `apiError`. Unexpected failures return `500` `{ error: "Something went wrong" }`. The real error is logged on the server and is not sent to the client.
 - Games `POST`/`PUT` reject a `Content-Length` over 10 KB with `413`. Chat rejects a `Content-Length` over 64 KB with `413`.
-- A missing catalog file is an empty catalog. A corrupt file logs a clear server error and the request returns `500`. It does not retry in a loop.
+- A missing database is created empty, then seeded from `data/games.json` when that file is present. A database that is not SQLite logs a clear server error and the request returns `500`. It does not retry in a loop.
 - Chat checks that `messages` is an array of objects with a role of `system`, `user`, or `assistant` and a `parts` array. Each user text part is capped at 1000 characters. The model call uses `AbortSignal.timeout(30_000)`.
 - Chat rate limit: 20 requests per minute per IP, `429` plus `Retry-After`. It is demo-grade and per process. A restart clears it, and another instance does not share the counts.
-- Tests use `GAMES_DATA_FILE` so they write a temp copy and never the real `data/games.json`. They cover repository CRUD, duplicate titles, 60 parallel creates, the route status codes above, the limiter with an injected clock, and one streamed `search_games` call through `MockLanguageModelV3`.
+- Tests use `GAMES_DATA_FILE` so they write a temp SQLite file and never the real database or `data/games.json`. They cover repository CRUD, duplicate titles, 60 parallel creates, the route status codes above, the limiter with an injected clock, and one streamed `search_games` call through `MockLanguageModelV3`.
 
 ## Going to production
 
-The JSON file cannot be the store in production: serverless filesystems are read-only. Move the catalog to SQLite on a volume or to Postgres. Add auth. Move the rate limit to a shared store. Add observability. Keep `GEMINI_API_KEY` on the server. Auth and deployment were left out on purpose.
+The catalog is a local SQLite file. A serverless filesystem is still read-only, so production needs that file on a volume or a move to Postgres. Add auth. Move the rate limit to a shared store. Add observability. Keep `GEMINI_API_KEY` on the server. Auth and deployment were left out on purpose.
 
 ## Limitations
 
-- The JSON write lock and the chat rate limit are in-process only. Two Node processes can still race and do not share the limit.
+- SQLite serializes writes to the database file. The chat rate limit is still in-process only, so another instance does not share it.
 - The catalog has one monthly figure per game, not a month history.
 - Chat needs a Gemini key and is subject to provider quota (the UI shows the `useChat` error, including 429/quota).
 - Chat history is not persisted when navigating away.

@@ -31,7 +31,7 @@ function request(url: string, init?: RequestInit) {
 beforeEach(async () => {
   realBefore = await readFile(realFile, "utf8");
   dir = await mkdtemp(path.join(tmpdir(), "games-routes-"));
-  file = path.join(dir, "games.json");
+  file = path.join(dir, "games.sqlite");
   process.env.GAMES_DATA_FILE = file;
 });
 

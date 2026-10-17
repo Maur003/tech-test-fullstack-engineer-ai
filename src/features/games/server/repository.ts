@@ -1,19 +1,16 @@
 import { randomUUID } from "crypto";
-import { readFile, rename, unlink, writeFile } from "fs/promises";
+import { existsSync, mkdirSync, readFileSync, unlinkSync } from "fs";
 import path from "path";
+import Database from "better-sqlite3";
 
 import { DuplicateTitleError, hasDuplicateTitle } from "@/features/games/domain/titles";
 import type { Game, GameInput } from "@/features/games/domain/types";
 
-function gamesDataPath(): string {
-  const override = process.env.GAMES_DATA_FILE?.trim();
-  if (override) return path.resolve(override);
-  return path.join(process.cwd(), "data", "games.json");
-}
+const SEED_FILE = path.join(process.cwd(), "data", "games.json");
 
 let writeQueue: Promise<unknown> = Promise.resolve();
 
-function enqueue<T>(task: () => Promise<T>): Promise<T> {
+function enqueue<T>(task: () => T): Promise<T> {
   const run = writeQueue.then(task, task);
   writeQueue = run.then(
     () => undefined,
@@ -22,94 +19,176 @@ function enqueue<T>(task: () => Promise<T>): Promise<T> {
   return run;
 }
 
-async function readGames(): Promise<Game[]> {
-  const dataFile = gamesDataPath();
-  let raw: string;
-  try {
-    raw = await readFile(dataFile, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-    throw error;
-  }
-
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      throw new Error("expected a JSON array");
-    }
-    return parsed as Game[];
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : "invalid JSON";
-    console.error(`Games data file is corrupt (${dataFile}): ${detail}`);
-    throw new Error(`Games data file is corrupt: ${dataFile}`);
-  }
+function gamesDbPath(): string {
+  const override = process.env.GAMES_DATA_FILE?.trim();
+  if (override) return path.resolve(override);
+  return path.join(process.cwd(), "data", "games.sqlite");
 }
 
-async function writeGames(games: Game[]): Promise<void> {
-  const dataFile = gamesDataPath();
-  const tmp = `${dataFile}.${process.pid}.${randomUUID()}.tmp`;
-  await writeFile(tmp, `${JSON.stringify(games, null, 2)}\n`, "utf8");
+function listRows(db: Database.Database): Game[] {
+  return db
+    .prepare(
+      `SELECT id, title, developer, genre, monthly_revenue_usd, monthly_downloads, average_rating
+       FROM games
+       ORDER BY rowid`,
+    )
+    .all() as Game[];
+}
+
+const insertSql = `INSERT INTO games (
+  id, title, developer, genre, monthly_revenue_usd, monthly_downloads, average_rating
+) VALUES (
+  @id, @title, @developer, @genre, @monthly_revenue_usd, @monthly_downloads, @average_rating
+)`;
+
+function isGame(value: unknown): value is Game {
+  if (!value || typeof value !== "object") return false;
+  const row = value as Record<string, unknown>;
+  return (
+    typeof row.id === "string" &&
+    typeof row.title === "string" &&
+    typeof row.developer === "string" &&
+    typeof row.genre === "string" &&
+    typeof row.monthly_revenue_usd === "number" &&
+    typeof row.monthly_downloads === "number" &&
+    typeof row.average_rating === "number"
+  );
+}
+
+function seedFromJson(db: Database.Database): void {
+  if (!existsSync(SEED_FILE)) return;
+
+  let parsed: unknown;
   try {
-    await rename(tmp, dataFile);
+    parsed = JSON.parse(readFileSync(SEED_FILE, "utf8"));
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === "EEXIST" || code === "EPERM") {
-      await unlink(dataFile);
-      await rename(tmp, dataFile);
-      return;
+    const detail = error instanceof Error ? error.message : "invalid JSON";
+    console.error(`Games seed file is corrupt (${SEED_FILE}): ${detail}`);
+    throw new Error(`Games database is corrupt: ${SEED_FILE}`);
+  }
+
+  if (!Array.isArray(parsed) || !parsed.every(isGame)) {
+    console.error(`Games seed file is corrupt (${SEED_FILE}): expected an array of games`);
+    throw new Error(`Games database is corrupt: ${SEED_FILE}`);
+  }
+
+  const insert = db.prepare(insertSql);
+  const writeSeed = db.transaction((rows: Game[]) => {
+    for (const row of rows) insert.run(row);
+  });
+  writeSeed(parsed);
+}
+
+function withDb<T>(fn: (db: Database.Database) => T): T {
+  const file = gamesDbPath();
+  mkdirSync(path.dirname(file), { recursive: true });
+  const isNew = !existsSync(file);
+  let db: Database.Database;
+  try {
+    db = new Database(file);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "invalid database";
+    console.error(`Games database is corrupt (${file}): ${detail}`);
+    throw new Error(`Games database is corrupt: ${file}`);
+  }
+
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    db.close();
+  };
+
+  let seeded = false;
+  try {
+    db.pragma("busy_timeout = 5000");
+    db.exec(`CREATE TABLE IF NOT EXISTS games (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      developer TEXT NOT NULL,
+      genre TEXT NOT NULL,
+      monthly_revenue_usd INTEGER NOT NULL,
+      monthly_downloads INTEGER NOT NULL,
+      average_rating REAL NOT NULL
+    )`);
+    if (isNew && !process.env.GAMES_DATA_FILE?.trim()) {
+      seedFromJson(db);
+      seeded = true;
     }
-    await unlink(tmp).catch(() => undefined);
+    return fn(db);
+  } catch (error) {
+    if (isNew && !seeded) {
+      close();
+      unlinkSync(file);
+    }
     throw error;
+  } finally {
+    close();
   }
 }
 
 export const gamesRepository = {
   list(): Promise<Game[]> {
-    return enqueue(() => readGames());
+    return enqueue(() => withDb((db) => listRows(db)));
   },
 
   get(id: string): Promise<Game | null> {
-    return enqueue(async () => {
-      const games = await readGames();
-      return games.find((game) => game.id === id) ?? null;
-    });
+    return enqueue(() =>
+      withDb((db) => listRows(db).find((game) => game.id === id) ?? null),
+    );
   },
 
   create(input: GameInput): Promise<Game> {
-    return enqueue(async () => {
-      const games = await readGames();
-      if (hasDuplicateTitle(games, input.title)) {
-        throw new DuplicateTitleError();
-      }
-      const game: Game = { id: randomUUID(), ...input };
-      games.push(game);
-      await writeGames(games);
-      return game;
-    });
+    return enqueue(() =>
+      withDb((db) => {
+        const insert = db.prepare(insertSql);
+        const createGame = db.transaction(() => {
+          if (hasDuplicateTitle(listRows(db), input.title)) {
+            throw new DuplicateTitleError();
+          }
+          const game: Game = { id: randomUUID(), ...input };
+          insert.run(game);
+          return game;
+        });
+        return createGame();
+      }),
+    );
   },
 
   update(id: string, input: GameInput): Promise<Game | null> {
-    return enqueue(async () => {
-      const games = await readGames();
-      const index = games.findIndex((game) => game.id === id);
-      if (index === -1) return null;
-      if (hasDuplicateTitle(games, input.title, id)) {
-        throw new DuplicateTitleError();
-      }
-      const game: Game = { id, ...input };
-      games[index] = game;
-      await writeGames(games);
-      return game;
-    });
+    return enqueue(() =>
+      withDb((db) => {
+        const write = db.prepare(
+          `UPDATE games
+           SET title = @title,
+               developer = @developer,
+               genre = @genre,
+               monthly_revenue_usd = @monthly_revenue_usd,
+               monthly_downloads = @monthly_downloads,
+               average_rating = @average_rating
+           WHERE id = @id`,
+        );
+        const updateGame = db.transaction(() => {
+          const games = listRows(db);
+          if (!games.some((game) => game.id === id)) return null;
+          if (hasDuplicateTitle(games, input.title, id)) {
+            throw new DuplicateTitleError();
+          }
+          const game: Game = { id, ...input };
+          write.run(game);
+          return game;
+        });
+        return updateGame();
+      }),
+    );
   },
 
   delete(id: string): Promise<boolean> {
-    return enqueue(async () => {
-      const games = await readGames();
-      const next = games.filter((game) => game.id !== id);
-      if (next.length === games.length) return false;
-      await writeGames(next);
-      return true;
-    });
+    return enqueue(() =>
+      withDb((db) => {
+        const result = db.prepare("DELETE FROM games WHERE id = ?").run(id);
+        return result.changes > 0;
+      }),
+    );
   },
 };

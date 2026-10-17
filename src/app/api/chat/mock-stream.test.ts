@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "fs/promises";
+import { mkdtemp, readFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
 import type { LanguageModelV3StreamPart } from "@ai-sdk/provider";
@@ -7,6 +7,7 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 
 import { setChatModelForTests } from "@/features/chat/server/model";
 import { resetChatRateLimit } from "@/features/chat/server/rate-limit";
+import { gamesRepository } from "@/features/games/server/repository";
 
 import { POST } from "./route";
 
@@ -37,23 +38,15 @@ beforeEach(async () => {
   process.env.GEMINI_API_KEY = "test-key";
   realBefore = await readFile(realFile, "utf8");
   dir = await mkdtemp(path.join(tmpdir(), "chat-mock-"));
-  const file = path.join(dir, "games.json");
-  process.env.GAMES_DATA_FILE = file;
-  await writeFile(
-    file,
-    `${JSON.stringify([
-      {
-        id: "temp-1",
-        title: "Temp Game",
-        developer: "Test Studio",
-        genre: "Puzzle",
-        monthly_revenue_usd: 5,
-        monthly_downloads: 6,
-        average_rating: 4,
-      },
-    ])}\n`,
-    "utf8",
-  );
+  process.env.GAMES_DATA_FILE = path.join(dir, "games.sqlite");
+  await gamesRepository.create({
+    title: "Temp Game",
+    developer: "Test Studio",
+    genre: "Puzzle",
+    monthly_revenue_usd: 5,
+    monthly_downloads: 6,
+    average_rating: 4,
+  });
 
   setChatModelForTests(
     new MockLanguageModelV3({

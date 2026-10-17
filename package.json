@@ -15,12 +15,14 @@
     "@ai-sdk/google": "^3.0.135",
     "@ai-sdk/react": "^3.0.312",
     "ai": "^6.0.309",
+    "better-sqlite3": "^11.10.0",
     "next": "14.2.35",
     "react": "^18",
     "react-dom": "^18",
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",

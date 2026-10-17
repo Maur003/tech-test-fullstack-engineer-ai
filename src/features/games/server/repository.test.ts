@@ -29,7 +29,7 @@ function input(title: string): GameInput {
 beforeEach(async () => {
   realBefore = await readFile(realFile, "utf8");
   dir = await mkdtemp(path.join(tmpdir(), "games-repo-"));
-  file = path.join(dir, "games.json");
+  file = path.join(dir, "games.sqlite");
   process.env.GAMES_DATA_FILE = file;
 });
 
@@ -68,15 +68,13 @@ it("rejects a duplicate title without writing a second row", async () => {
   expect(games[0]?.title).toBe("Lantern");
 });
 
-it("keeps all 60 parallel creates in one valid JSON file", async () => {
+it("keeps all 60 parallel creates in the database", async () => {
   await Promise.all(
     Array.from({ length: 60 }, (_, index) => gamesRepository.create(input(`Parallel ${index}`))),
   );
 
-  const raw = await readFile(file, "utf8");
-  const parsed = JSON.parse(raw) as Array<{ id: string; title: string }>;
-  expect(Array.isArray(parsed)).toBe(true);
-  expect(parsed).toHaveLength(60);
-  expect(new Set(parsed.map((game) => game.id)).size).toBe(60);
-  expect(new Set(parsed.map((game) => game.title)).size).toBe(60);
+  const games = await gamesRepository.list();
+  expect(games).toHaveLength(60);
+  expect(new Set(games.map((game) => game.id)).size).toBe(60);
+  expect(new Set(games.map((game) => game.title)).size).toBe(60);
 });
