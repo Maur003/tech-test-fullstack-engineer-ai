@@ -3,22 +3,62 @@
 @tailwind utilities;
 
 :root {
-  --background: #f6f1e8;
-  --foreground: #1c1917;
+  --background: #090b10;
+  --foreground: #f4f1ea;
 }
 
 body {
+  color-scheme: dark;
   color: var(--foreground);
-  background: var(--background);
-  font-family: var(--font-geist-sans), Georgia, serif;
+  background:
+    radial-gradient(900px 420px at 10% -10%, rgba(217, 119, 6, 0.18), transparent 55%),
+    radial-gradient(700px 380px at 100% 0%, rgba(56, 189, 248, 0.08), transparent 50%),
+    var(--background);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  min-height: 100vh;
 }
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
+dialog {
+  margin: auto;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  max-width: calc(100% - 2rem);
+}
+
+dialog[open] {
+  animation: pop 0.22s ease-out;
+}
+
 dialog::backdrop {
-  background: rgb(28 25 23 / 0.45);
+  background: rgba(4, 6, 10, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  dialog[open],
+  .animate-rise,
+  .animate-pop,
+  .animate-shimmer {
+    animation: none;
+  }
 }
