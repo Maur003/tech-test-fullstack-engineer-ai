@@ -4,9 +4,21 @@ How AI tools were used: see [AI_WORKFLOW.md](AI_WORKFLOW.md).
 
 Internal dashboard for a fictional indie-game catalog, plus a streaming chat that answers questions by calling tools. The catalog is never pasted into the model prompt.
 
+**Stack:** Next.js 14.2.35 (App Router), TypeScript 5.9.3, Tailwind CSS 3.4.19, SQLite via Prisma 6.19.3, Vercel AI SDK 6.0.309 with Gemini, Vitest 3.2.4.
+
+All 12 seed games are fictional.
+
+Try these in the chat:
+
+- "Which game made the most revenue last month?" Lantern Circuit and Paper Harbor tie at $42,000.
+- "How many games are rated above 4?" 7. Copper Kite is exactly 4.0, so it is not included.
+- "Compare revenue of Lantern Circuit vs Glass Orchard." Glass Orchard is $11,000 below Lantern Circuit, which is -26.190476%.
+- "Compare revenue of Lantern vs Nope Game." Neither title is an exact match. The suggestion for "Lantern" is Lantern Circuit. "Nope Game" has no suggestion.
+- "What is the average rating per genre?" Puzzle 4, Platformer 4.5, Narrative 4.1, Roguelike 3.85, Simulation 4.
+
 ## How to run
 
-Requires Node.js 20 (this repo pins AI SDK 6 because AI SDK 7 needs Node 22+).
+Node.js 20 (developed and tested on v20.16.0). This repo pins AI SDK 6 because AI SDK 7 needs Node 22+.
 
 ```bash
 npm install
@@ -14,6 +26,10 @@ cp .env.example .env.local
 # set GEMINI_API_KEY (and optionally GEMINI_MODEL) in .env.local
 npm run dev
 ```
+
+`npm install` also runs `prisma generate`. It does not create the database. `data/games.sqlite` is created the first time the catalog is opened: the dashboard calls `GET /api/games`, and that request reaches the repository. If `data/games.sqlite` does not exist yet and `GAMES_DATA_FILE` is unset, the repository creates the file, creates the `games` table, and copies every row from `data/games.json`. An existing database file is not seeded again. Delete `data/games.sqlite` and the next catalog request creates and seeds it again.
+
+If `better-sqlite3` fails to install, use Node 20 LTS (it has a prebuilt binary) or install the C++ build tools for your platform.
 
 Open [http://localhost:3000](http://localhost:3000) for the dashboard and [http://localhost:3000/chat](http://localhost:3000/chat) for chat.
 
@@ -67,17 +83,29 @@ src/components                   shared chrome (site header)
 2. Components never import from a `server` folder.
 3. There is no barrel `index.ts` that mixes components and server code.
 
+This is a modular monolith: one Next.js app and one deployable, with feature boundaries enforced by ESLint (`no-restricted-imports`) so a feature, such as the chat or the catalog API, could be extracted later without touching the domain code. The rule is set in three `.eslintrc.json` overrides: domain files cannot import `react`, `next`, `fs`, or `ai`; component files cannot import a `server` folder; `src/features/**/index.ts` cannot import `server` or `components`.
+
 ```mermaid
 flowchart LR
-  routes["app routes"] --> features["features"]
-  features --> domain["domain"]
+  page["app/page.tsx"] --> dashboard["games/components"]
+  chatPage["app/chat/page.tsx"] --> chatUi["chat/components"]
+  dashboard -->|"HTTP /api/games"| gamesApi["app/api/games"]
+  chatUi -->|"HTTP POST /api/chat"| chatApi["app/api/chat"]
+  gamesApi --> gamesServer["games/server"]
+  gamesApi --> gamesDomain["games/domain"]
+  chatApi --> chatServer["chat/server"]
+  chatServer --> gamesDomain
+  chatServer --> gamesServer
+  gamesServer --> gamesDomain
 ```
 
 Feature folders keep each product area's domain, server code, and UI together, instead of splitting one feature across layer folders or atomic design.
 
 ## Design decisions
 
-- Persistence is a SQLite file, `data/games.sqlite` by default, accessed through Prisma Client (`prisma/schema.prisma`) and the `better-sqlite3` adapter in `src/features/games/server/repository.ts`. The first time that file is created, rows are copied from `data/games.json`. `GAMES_DATA_FILE` points at a different database. Delete the database file to load the seed again.
+- The catalog file is `data/games.sqlite`. Prisma Client (`prisma/schema.prisma`) reaches it through the `better-sqlite3` adapter in `src/features/games/server/repository.ts`.
+- Seeding happens once, on the first repository call that finds no database file and no `GAMES_DATA_FILE`. That call copies `data/games.json` into the new file. A later call leaves the existing rows alone. Delete the file to seed again.
+- `GAMES_DATA_FILE`, when set, is the database path. Those databases are created empty and are not seeded from `data/games.json`.
 - Routes and pages that read the file or `process.env` set `dynamic = "force-dynamic"` so a POST is visible on the next GET.
 - Gemini is called with `@ai-sdk/google` `createGoogleGenerativeAI({ apiKey: process.env.GEMINI_API_KEY })` because the provider’s default env var is `GOOGLE_GENERATIVE_AI_API_KEY`. Default model is `gemini-2.5-flash`.
 - AI SDK 6 APIs from the installed docs: `streamText`, `tool({ inputSchema })`, `stopWhen: stepCountIs(5)`, `convertToModelMessages`, `result.toUIMessageStreamResponse()`, and `useChat` with `DefaultChatTransport`.
