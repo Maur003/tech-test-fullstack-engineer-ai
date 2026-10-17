@@ -1,3 +1,4 @@
+import { apiError, bodyTooLarge, GAMES_MAX_BODY_BYTES, unexpectedError } from "@/lib/http/api-error";
 import { gamesRepository } from "@/lib/games/repository";
 import { parseGameInput } from "@/lib/games/schema";
 import { DuplicateTitleError } from "@/lib/games/titles";
@@ -5,42 +6,40 @@ import { DuplicateTitleError } from "@/lib/games/titles";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const games = await gamesRepository.list();
-  return Response.json(games);
+  try {
+    const games = await gamesRepository.list();
+    return Response.json(games);
+  } catch (error) {
+    return unexpectedError(error);
+  }
 }
 
 export async function POST(request: Request) {
-  let body: unknown;
   try {
-    body = await request.json();
-  } catch {
-    return Response.json(
-      { error: "Invalid JSON", fields: {} },
-      { status: 400 },
-    );
-  }
+    if (bodyTooLarge(request, GAMES_MAX_BODY_BYTES)) {
+      return apiError(413, "Request body is too large");
+    }
 
-  const parsed = parseGameInput(body);
-  if (!parsed.ok) {
-    return Response.json(
-      { error: "Invalid game", fields: parsed.fields },
-      { status: 400 },
-    );
-  }
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return apiError(400, "Invalid JSON", {});
+    }
 
-  try {
+    const parsed = parseGameInput(body);
+    if (!parsed.ok) {
+      return apiError(400, "Invalid game", parsed.fields);
+    }
+
     const game = await gamesRepository.create(parsed.data);
     return Response.json(game, { status: 201 });
   } catch (error) {
     if (error instanceof DuplicateTitleError) {
-      return Response.json(
-        {
-          error: "A game with this title already exists",
-          fields: { title: ["Title must be unique"] },
-        },
-        { status: 409 },
-      );
+      return apiError(409, "A game with this title already exists", {
+        title: ["Title must be unique"],
+      });
     }
-    throw error;
+    return unexpectedError(error);
   }
 }

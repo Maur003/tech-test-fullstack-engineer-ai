@@ -5,7 +5,11 @@ import path from "path";
 import { DuplicateTitleError, hasDuplicateTitle } from "./titles";
 import type { Game, GameInput } from "./types";
 
-const dataFile = path.join(process.cwd(), "data", "games.json");
+function gamesDataPath(): string {
+  const override = process.env.GAMES_DATA_FILE?.trim();
+  if (override) return path.resolve(override);
+  return path.join(process.cwd(), "data", "games.json");
+}
 
 let writeQueue: Promise<unknown> = Promise.resolve();
 
@@ -19,11 +23,30 @@ function enqueue<T>(task: () => Promise<T>): Promise<T> {
 }
 
 async function readGames(): Promise<Game[]> {
-  const raw = await readFile(dataFile, "utf8");
-  return JSON.parse(raw) as Game[];
+  const dataFile = gamesDataPath();
+  let raw: string;
+  try {
+    raw = await readFile(dataFile, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      throw new Error("expected a JSON array");
+    }
+    return parsed as Game[];
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "invalid JSON";
+    console.error(`Games data file is corrupt (${dataFile}): ${detail}`);
+    throw new Error(`Games data file is corrupt: ${dataFile}`);
+  }
 }
 
 async function writeGames(games: Game[]): Promise<void> {
+  const dataFile = gamesDataPath();
   const tmp = `${dataFile}.${process.pid}.${randomUUID()}.tmp`;
   await writeFile(tmp, `${JSON.stringify(games, null, 2)}\n`, "utf8");
   try {

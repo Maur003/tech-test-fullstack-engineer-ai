@@ -30,12 +30,12 @@ npm run build
 
 | Method | Path | Success | Errors |
 | --- | --- | --- | --- |
-| GET | `/api/games` | `200` array of games | |
-| POST | `/api/games` | `201` created game | `400` `{ error, fields }`, `409` duplicate title |
-| GET | `/api/games/:id` | `200` game | `404` |
-| PUT | `/api/games/:id` | `200` updated game | `400` field errors, `404` missing, `409` duplicate title |
-| DELETE | `/api/games/:id` | `204` | `404` |
-| POST | `/api/chat` | UI message stream | `503` if `GEMINI_API_KEY` is missing, `400` for a bad body |
+| GET | `/api/games` | `200` array of games | `500` if the catalog file is corrupt |
+| POST | `/api/games` | `201` created game | `400` `{ error, fields }`, `409` duplicate title, `413` body over 10 KB, `500` unexpected |
+| GET | `/api/games/:id` | `200` game | `404`, `500` unexpected |
+| PUT | `/api/games/:id` | `200` updated game | `400` field errors, `404` missing, `409` duplicate title, `413` body over 10 KB, `500` unexpected |
+| DELETE | `/api/games/:id` | `204` | `404`, `500` unexpected |
+| POST | `/api/chat` | UI message stream | `503` if `GEMINI_API_KEY` is missing, `400` for a bad body, `413` body over 64 KB, `429` with `Retry-After` after 20 requests per minute per IP |
 
 Game fields: `id`, `title`, `developer`, `genre`, `monthly_revenue_usd` (int ≥ 0), `monthly_downloads` (int ≥ 0), `average_rating` (0–5, one decimal).
 
@@ -57,10 +57,22 @@ All math runs in code. Tool results are capped at 20 rows. The chat loop stops a
 - Gemini is called with `@ai-sdk/google` `createGoogleGenerativeAI({ apiKey: process.env.GEMINI_API_KEY })` because the provider’s default env var is `GOOGLE_GENERATIVE_AI_API_KEY`. Default model is `gemini-2.5-flash`.
 - AI SDK 6 APIs from the installed docs: `streamText`, `tool({ inputSchema })`, `stopWhen: stepCountIs(5)`, `convertToModelMessages`, `result.toUIMessageStreamResponse()`, and `useChat` with `DefaultChatTransport`.
 
+## Beyond the brief
+
+- Every route uses `apiError`. Unexpected failures return `500` `{ error: "Something went wrong" }`. The real error is logged on the server and is not sent to the client.
+- Games `POST`/`PUT` reject a `Content-Length` over 10 KB with `413`. Chat rejects a `Content-Length` over 64 KB with `413`.
+- A missing catalog file is an empty catalog. A corrupt file logs a clear server error and the request returns `500`. It does not retry in a loop.
+- Chat checks that `messages` is an array of objects with a role of `system`, `user`, or `assistant` and a `parts` array. Each user text part is capped at 1000 characters. The model call uses `AbortSignal.timeout(30_000)`.
+- Chat rate limit: 20 requests per minute per IP, `429` plus `Retry-After`. It is demo-grade and per process. A restart clears it, and another instance does not share the counts.
+- Tests use `GAMES_DATA_FILE` so they write a temp copy and never the real `data/games.json`. They cover repository CRUD, duplicate titles, 60 parallel creates, the route status codes above, the limiter with an injected clock, and one streamed `search_games` call through `MockLanguageModelV3`.
+
+## Going to production
+
+The JSON file cannot be the store in production: serverless filesystems are read-only. Move the catalog to SQLite on a volume or to Postgres. Add auth. Move the rate limit to a shared store. Add observability. Keep `GEMINI_API_KEY` on the server. Auth and deployment were left out on purpose.
+
 ## Limitations
 
-- No auth, no deployment config, and no tests beyond the tool math, Zod validation, and history trim.
-- The JSON write lock is in-process only. Two Node processes can still race.
+- The JSON write lock and the chat rate limit are in-process only. Two Node processes can still race and do not share the limit.
 - The catalog has one monthly figure per game, not a month history.
 - Chat needs a Gemini key and is subject to provider quota (the UI shows the `useChat` error, including 429/quota).
 - Chat history is not persisted when navigating away.
