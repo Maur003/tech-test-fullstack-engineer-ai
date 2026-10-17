@@ -1,74 +1,63 @@
-# Full Stack Engineer (AI) — Technical Assessment
+# Indie catalog
 
-**Time limit:** 2–3 hours max.
+Internal dashboard for a fictional indie-game catalog, plus a streaming chat that answers questions by calling tools. The catalog is never pasted into the model prompt.
 
----
+## How to run
 
-## Challenge
+Requires Node.js 20 (this repo pins AI SDK 6 because AI SDK 7 needs Node 22+).
 
-Build a small **internal dashboard** to manage a catalog of indie games, plus an **AI chat** that answers natural-language questions about that catalog.
+```bash
+npm install
+cp .env.example .env.local
+# set GEMINI_API_KEY (and optionally GEMINI_MODEL) in .env.local
+npm run dev
+```
 
-### Requirements
+Open [http://localhost:3000](http://localhost:3000) for the dashboard and [http://localhost:3000/chat](http://localhost:3000/chat) for chat.
 
-1. **Games CRUD**
-   Fields: `title`, `developer`, `genre`, `monthly_revenue_usd`, `monthly_downloads`, `average_rating`.
-   Persist locally (SQLite, JSON, or in-memory).
+Without `GEMINI_API_KEY`, the dashboard still works. The chat page tells you to set the key, and `POST /api/chat` returns `503`.
 
-2. **REST API**
-   Expose the catalog via API routes.
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
 
-3. **AI Chat**
-   Chat UI that answers questions like:
-   - *"Which game made the most revenue last month?"*
-   - *"How many games are rated above 4?"*
-   - *"Compare revenue of Game A vs Game B."*
+## API
 
-   - Must use **tool calling / function calling** to query the data. Do **not** dump the full DB into the prompt.
-   - Responses must **stream**.
+| Method | Path | Success | Errors |
+| --- | --- | --- | --- |
+| GET | `/api/games` | `200` array of games | |
+| POST | `/api/games` | `201` created game | `400` `{ error, fields }` |
+| GET | `/api/games/:id` | `200` game | `404` |
+| PUT | `/api/games/:id` | `200` updated game | `400` field errors, `404` missing |
+| DELETE | `/api/games/:id` | `204` | `404` |
+| POST | `/api/chat` | UI message stream | `503` if `GEMINI_API_KEY` is missing, `400` for a bad body |
 
-4. **UI**
-   Dashboard view (table or cards) + chat view. Tailwind is fine.
+Game fields: `id`, `title`, `developer`, `genre`, `monthly_revenue_usd` (int ≥ 0), `monthly_downloads` (int ≥ 0), `average_rating` (0–5, one decimal).
 
-### Stack
+## Tools
 
-- Next.js 14+ (App Router) + TypeScript
-- Tailwind CSS
-- **LLM layer:** your choice — Anthropic SDK, OpenAI SDK, Vercel AI SDK, OpenRouter, LangChain / LangGraph, etc. Any model/provider is fine as long as tool calling + streaming work.
-- Storage: your choice (SQLite, JSON, in-memory)
+The model can call:
 
-### Out of scope
+1. `search_games` — optional `genre`, `developer`, `rating_above` (strict `>`), `rating_at_least` (`>=`), `sort_by`, `order`, `limit` (default 10, max 20). Sorting revenue descending keeps every game tied for the top revenue.
+2. `count_games` — the same filters.
+3. `compare_games` — `{ titles: string[2..4] }`. Exact title match, case-insensitive. Returns rows plus absolute and percent difference versus the first title. Missing titles return `{ notFound, suggestions }` and no invented rows. A suggestion is a catalog title that contains the typed text. Differences are rounded to 6 decimal places. Percent is `null` when the baseline is 0.
+4. `aggregate_games` — `{ metric, op: sum|avg|min|max, group_by?: genre|developer }`.
 
-Auth, deployment, production error handling, full test coverage.
+All math runs in code. Tool results are capped at 20 rows. The chat loop stops after 5 steps. The server keeps the last 12 messages and drops a leading non-user message so the window starts with the user.
 
----
+## Design decisions
 
-## Mandatory: `AI_WORKFLOW.md`
+- Persistence is `data/games.json` behind `src/lib/games/repository.ts`. Writes are queued in-process and saved by writing a temp file then renaming it.
+- Routes and pages that read the file or `process.env` set `dynamic = "force-dynamic"` so a POST is visible on the next GET.
+- Gemini is called with `@ai-sdk/google` `createGoogleGenerativeAI({ apiKey: process.env.GEMINI_API_KEY })` because the provider’s default env var is `GOOGLE_GENERATIVE_AI_API_KEY`. Default model is `gemini-2.5-flash`.
+- AI SDK 6 APIs from the installed docs: `streamText`, `tool({ inputSchema })`, `stopWhen: stepCountIs(5)`, `convertToModelMessages`, `result.toUIMessageStreamResponse()`, and `useChat` with `DefaultChatTransport`.
 
-Include a file documenting how you used AI coding tools (Claude Code, Cursor, etc.) during this assessment:
+## Limitations
 
-1. Which tool(s) and why.
-2. 3–5 concrete prompts you used and their outcome.
-3. One moment where the AI got it wrong and how you fixed it.
-4. If you used parallel agents / subagents / worktrees, describe how.
-
----
-
-## Evaluation
-
-| Area | Weight |
-|---|---|
-| Use of AI coding tools (`AI_WORKFLOW.md`) | 30% |
-| Full-stack implementation (CRUD + API + chat + tool use) | 30% |
-| Code quality | 20% |
-| UX | 10% |
-| README clarity | 10% |
-
----
-
-## How to submit
-
-1. **Fork** this repo.
-2. Create branch `submission/<your-name>`.
-3. Implement.
-4. Open a **Pull Request** to `main` of this repo.
-5. In the PR include: time spent, how to run locally, trade-offs made.
+- No auth, no deployment config, and no tests beyond the tool math, Zod validation, and history trim.
+- The JSON write lock is in-process only. Two Node processes can still race.
+- The catalog has one monthly figure per game, not a month history.
+- Chat needs a Gemini key and is subject to provider quota (the UI shows the `useChat` error, including 429/quota).

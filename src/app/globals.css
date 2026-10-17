@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #f6f1e8;
+  --foreground: #1c1917;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-geist-sans), Georgia, serif;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+dialog::backdrop {
+  background: rgb(28 25 23 / 0.45);
+}
