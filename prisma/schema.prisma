@@ -1,0 +1,21 @@
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./data/games.sqlite"
+}
+
+model Game {
+  id                  String @id
+  title               String
+  developer           String
+  genre               String
+  monthly_revenue_usd Int
+  monthly_downloads   Int
+  average_rating      Float
+
+  @@map("games")
+}

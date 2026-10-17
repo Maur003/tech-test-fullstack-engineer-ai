@@ -55,7 +55,7 @@ All math runs in code. Tool results are capped at 20 rows. The chat loop stops a
 ```
 src/app                          routes and route handlers only
 src/features/games/domain        types, input schema, title rules, catalog queries
-src/features/games/server        SQLite repository
+src/features/games/server        Prisma repository over SQLite
 src/features/games/components    dashboard, table, dialogs
 src/features/chat/server         tool wrappers, prompt, trim, rate limit, model
 src/features/chat/components     chat panel
@@ -77,7 +77,7 @@ Feature folders keep each product area's domain, server code, and UI together, i
 
 ## Design decisions
 
-- Persistence is a SQLite file, `data/games.sqlite` by default, behind `src/features/games/server/repository.ts`. The first time that file is created, rows are copied from `data/games.json`. `GAMES_DATA_FILE` points at a different database. Delete the database file to load the seed again.
+- Persistence is a SQLite file, `data/games.sqlite` by default, accessed through Prisma Client (`prisma/schema.prisma`) and the `better-sqlite3` adapter in `src/features/games/server/repository.ts`. The first time that file is created, rows are copied from `data/games.json`. `GAMES_DATA_FILE` points at a different database. Delete the database file to load the seed again.
 - Routes and pages that read the file or `process.env` set `dynamic = "force-dynamic"` so a POST is visible on the next GET.
 - Gemini is called with `@ai-sdk/google` `createGoogleGenerativeAI({ apiKey: process.env.GEMINI_API_KEY })` because the provider’s default env var is `GOOGLE_GENERATIVE_AI_API_KEY`. Default model is `gemini-2.5-flash`.
 - AI SDK 6 APIs from the installed docs: `streamText`, `tool({ inputSchema })`, `stopWhen: stepCountIs(5)`, `convertToModelMessages`, `result.toUIMessageStreamResponse()`, and `useChat` with `DefaultChatTransport`.
